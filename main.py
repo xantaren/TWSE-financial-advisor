@@ -92,7 +92,7 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
         f'https://goodinfo.tw/tw/BasicInfo.asp?STOCK_ID={stock_number}',
         f'https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID={stock_number}',
         f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=BS_M_QUAR&STOCK_ID={stock_number}',
-        f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=BS_M_QUAR&STOCK_ID={stock_number}',
+        f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=IS_M_QUAR_ACC&STOCK_ID={stock_number}',
         f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=CF_M_QUAR_ACC&STOCK_ID={stock_number}'
     ]
 
