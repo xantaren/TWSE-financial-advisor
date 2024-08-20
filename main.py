@@ -30,7 +30,7 @@ def get_provider(enum: GenAiProviderEnum) -> GenAiProvider:
 
 class GoogleGemini(GenAiProvider):
     def __init__(self):
-        self._api_key = "Not today!"
+        self._api_key = ""
 
     def generate_content(self, system_instruction: str, prompt: str) -> str:
         api_key = self._api_key
@@ -49,7 +49,7 @@ class GoogleGemini(GenAiProvider):
 
 class OpenAi(GenAiProvider):
     def __init__(self):
-        self._api_key = "Not today!"
+        self._api_key = ""
 
     def generate_content(self, system_instruction: str, prompt: str) -> str:
         client = OpenAI(api_key=self._api_key)
@@ -93,7 +93,8 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
         f'https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID={stock_number}',
         f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=BS_M_QUAR&STOCK_ID={stock_number}',
         f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=IS_M_QUAR_ACC&STOCK_ID={stock_number}',
-        f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=CF_M_QUAR_ACC&STOCK_ID={stock_number}'
+        f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=CF_M_QUAR_ACC&STOCK_ID={stock_number}',
+        f'https://goodinfo.tw/tw/StockFinGrade.asp?STOCK_ID={stock_number}'
     ]
 
     tasks = [make_simple_get_request(session, url) for url in urls]
@@ -106,7 +107,8 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
         convert_to_string("財務報表", soups[1].select_one('#txtFinDetailData')),
         convert_to_string("資產負債表", soups[2].select_one('#divFinDetail')),
         convert_to_string("損益表", soups[3].select_one('#divFinDetail')),
-        convert_to_string("現金流量表", soups[4].select_one('#divFinDetail'))
+        convert_to_string("現金流量表", soups[4].select_one('#divFinDetail')),
+        convert_to_string("財報評比資料", soups[5].select_one('#divDetail'))
     ]
 
     return data
@@ -119,11 +121,16 @@ async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
     joined_data = "\n\n".join(data)
     print(joined_data)
 
-    system_instruction = """您是一位經驗豐富的投資者，效仿華倫‧巴菲特。
-    您的主要目標是識別具有強大基本面和長期競爭優勢的被低估的公司。
-    考慮商業模式、管理品質、財務健康狀況和行業趨勢等因素。
-    提供潛在投資機會的詳細分析，包括風險和回報。你使用的語言為台灣繁體中文，請勿在回覆中夾帶中國簡體字。
-    請你以長期價值投資的角度，對以下公司的財報、資產負債表、損益表、現金流量表進行深入分析。最後以滿分十分最低零分給予綜合分數評價"""
+    system_instruction = """您是一位經驗豐富的價值投資者，深受華倫·巴菲特投資理念的啟發。
+    主要目標： 尋找具備強大基本面和長期競爭優勢但目前市值被低估的公司。
+    分析重點：
+    商業模式： 公司業務的核心運作方式，是否能夠在未來保持競爭優勢。
+    管理品質： 公司高層管理團隊的能力、誠信和長期戰略規劃。
+    財務健康狀況： 包括資產負債表、損益表、現金流量表，重點關注流動性、負債水平、盈利能力和現金流的穩定性。
+    行業趨勢： 評估公司所處行業的長期發展趨勢和競爭格局。
+    風險與回報： 提供每個潛在投資機會的詳細風險和預期回報分析。
+    語言要求： 所有回應均需使用台灣繁體中文，避免使用中國簡體字。
+    評分系統： 請以中長期價值投資的角度以及該公司是否受市場低估給予零到十分給的綜合評分。"""
 
     provider = get_provider(gen_ai_provider)
     generated_content = provider.generate_content(system_instruction, joined_data)
