@@ -1,4 +1,6 @@
 import asyncio
+import json
+
 import aiohttp
 from bs4 import BeautifulSoup
 import pandas
@@ -76,6 +78,46 @@ def convert_to_string(name: str, data: BeautifulSoup) -> str:
     return f"{name}\n" + pandas.read_html(StringIO(data.prettify()))[0].to_string()
 
 
+def transform_and_filter_relevant_stock_data(json_data):
+    attribute_mapping = {
+        "z": "當前盤中成交價",
+        "tv": "當前盤中盤成交量",
+        "v": "累積成交量",
+        "b": "揭示買價(從高到低，以_分隔資料)",
+        "g": "揭示買量(配合b，以_分隔資料)",
+        "a": "揭示賣價(從低到高，以_分隔資料)",
+        "f": "揭示賣量(配合a，以_分隔資料)",
+        "o": "開盤價格",
+        "h": "最高價格",
+        "l": "最低價格",
+        "y": "昨日收盤價格",
+        "u": "漲停價",
+        "w": "跌停價",
+        "tlong": "資料更新時間（單位：毫秒）",
+        "d": "最近交易日期（YYYYMMDD）",
+        "t": "最近成交時刻（HH:MI:SS）",
+        "c": "股票代號",
+        "n": "公司簡稱",
+        "nf": "公司全名"
+    }
+
+    # Extract the array of stock data
+    msg_array = json_data.get("msgArray", [])
+
+    transformed_data = []
+
+    for item in msg_array:
+        transformed_item = {}
+        for key, value in item.items():
+            if key in attribute_mapping:
+                # Replace the key with its Chinese counterpart
+                new_key = attribute_mapping[key]
+                transformed_item[new_key] = value
+        transformed_data.append(transformed_item)
+
+    return str(transformed_data)
+
+
 async def make_simple_get_request(session: aiohttp.ClientSession, url: str) -> str:
     headers = {
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 '
@@ -89,8 +131,25 @@ async def make_simple_get_request(session: aiohttp.ClientSession, url: str) -> s
 
 
 async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: int) -> list:
+    # Fetch current stock price and essential company info
+    stock_market_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{stock_number}.tw'
+    emerging_stock_market_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{stock_number}.tw'
+
+    stock_current_status_data_response = await make_simple_get_request(session, stock_market_price_api)
+    stock_current_status_data = json.loads(stock_current_status_data_response)
+
+    # Check if the main API returned valid data, if not, try the emerging stock market API
+    if not stock_current_status_data.get('msgArray')[0].get('pid'):
+        stock_current_status_data_response = await make_simple_get_request(session, emerging_stock_market_price_api)
+        stock_current_status_data = json.loads(stock_current_status_data_response)
+
+    if not stock_current_status_data.get('msgArray')[0].get('pid'):
+        return []
+
+    basic_info_and_current_price = transform_and_filter_relevant_stock_data(stock_current_status_data)
+
+    # Fetch accounting spreadsheets
     urls = [
-        f'https://goodinfo.tw/tw/BasicInfo.asp?STOCK_ID={stock_number}',
         f'https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID={stock_number}',
         f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=BS_M_QUAR&STOCK_ID={stock_number}',
         f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=IS_M_QUAR_ACC&STOCK_ID={stock_number}',
@@ -104,12 +163,12 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
     soups = [BeautifulSoup(response, 'html5lib') for response in responses]
 
     data = [
-        convert_to_string("基本資料表", soups[0].find('table', class_='b1 p4_6 r10 box_shadow')),
-        convert_to_string("財務報表", soups[1].select_one('#txtFinDetailData')),
-        convert_to_string("資產負債表", soups[2].select_one('#divFinDetail')),
-        convert_to_string("損益表", soups[3].select_one('#divFinDetail')),
-        convert_to_string("現金流量表", soups[4].select_one('#divFinDetail')),
-        convert_to_string("財報評比資料", soups[5].select_one('#divDetail'))
+        basic_info_and_current_price,
+        convert_to_string("財務報表", soups[0].select_one('#txtFinDetailData')),
+        convert_to_string("資產負債表", soups[1].select_one('#divFinDetail')),
+        convert_to_string("損益表", soups[2].select_one('#divFinDetail')),
+        convert_to_string("現金流量表", soups[3].select_one('#divFinDetail')),
+        convert_to_string("財報評比資料", soups[4].select_one('#divDetail'))
     ]
 
     return data
@@ -118,6 +177,9 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
 async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
     async with aiohttp.ClientSession() as session:
         data = await fetch_and_process_data(session, stock_number)
+
+    if not data:
+        return
 
     joined_data = "\n\n".join(data)
     print(joined_data)
