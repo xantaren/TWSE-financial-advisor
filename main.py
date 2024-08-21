@@ -184,8 +184,10 @@ def send_to_gen_ai_provider(gen_ai_provider: GenAiProviderEnum, joined_data: str
     行業趨勢： 評估公司所處行業的長期發展趨勢和競爭格局。
     風險與回報： 提供每個潛在投資機會的詳細風險和預期回報分析。
     語言要求： 所有回應均需使用台灣繁體中文，避免使用中國簡體字。
-    買進建議： 請根據判財報評比資料斷現階段是否適合進倉，若否則建議適當的買進價格。務必考量現價，若建議價格與現價落差太大易有錯失機會的可能性。
+    買進建議： 請根據判財報評比資料斷現階段是否適合進倉，若否則建議適當的買進價格。
+    務必考量現價，若建議價格與現價落差太大易有錯失機會的可能性。建議價格若高於現價請直接建議進倉。
     評分系統： 請以中長期價值投資的角度以及該公司是否受市場低估給予零到十分給的綜合評分。"""
+
     provider = get_provider(gen_ai_provider)
     return provider.generate_content(system_instruction, joined_data)
 
