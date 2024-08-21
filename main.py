@@ -14,6 +14,8 @@ import google.generativeai as genai
 from enum import Enum
 import os
 import markdown
+from sqlitedict import SqliteDict
+import timeit
 
 
 class GenAiProviderEnum(Enum):
@@ -132,7 +134,8 @@ async def make_simple_get_request(session: aiohttp.ClientSession, url: str) -> s
         return await response.text(encoding='utf-8')
 
 
-async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: int) -> list:
+async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: int) -> str:
+    stock_number = str(stock_number)
     # Fetch current stock price and essential company info
     taiwan_stock_exchange_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{stock_number}.tw'
     over_the_counter_market_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{stock_number}.tw'
@@ -146,9 +149,14 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
         stock_current_status_data = json.loads(stock_current_status_data_response)
 
     if not stock_current_status_data.get('msgArray')[0].get('pid'):
-        return []
+        return ""
 
     basic_info_and_current_price = transform_and_filter_relevant_stock_data(stock_current_status_data)
+
+    db = SqliteDict("db.sqlite")
+    if db.get(stock_number):
+        print("data from db")
+        return basic_info_and_current_price + "\n\n" + db.get(stock_number)
 
     # Fetch accounting spreadsheets
     urls = [
@@ -164,16 +172,23 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
 
     soups = [BeautifulSoup(response, 'html5lib') for response in responses]
 
-    data = [
-        basic_info_and_current_price,
-        convert_to_string("財務報表", soups[0].select_one('#txtFinDetailData')),
-        convert_to_string("資產負債表", soups[1].select_one('#divFinDetail')),
-        convert_to_string("損益表", soups[2].select_one('#divFinDetail')),
-        convert_to_string("現金流量表", soups[3].select_one('#divFinDetail')),
-        convert_to_string("財報評比資料", soups[4].select_one('#divDetail'))
-    ]
+    data = "\n\n".join(
+        [
+            convert_to_string("財務報表", soups[0].select_one('#txtFinDetailData')),
+            convert_to_string("資產負債表", soups[1].select_one('#divFinDetail')),
+            convert_to_string("損益表", soups[2].select_one('#divFinDetail')),
+            convert_to_string("現金流量表", soups[3].select_one('#divFinDetail')),
+            convert_to_string("財報評比資料", soups[4].select_one('#divDetail'))
+        ]
+    )
 
-    return data
+    print("saving data to db")
+    db[stock_number] = data
+    db.commit()
+    db.close()
+
+    print("data from online")
+    return basic_info_and_current_price + "\n\n" + data
 
 
 def send_to_gen_ai_provider(gen_ai_provider: GenAiProviderEnum, joined_data: str):
@@ -221,10 +236,19 @@ async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
     if not data:
         return
 
-    joined_data = "\n\n".join(data)
-    generated_content = send_to_gen_ai_provider(gen_ai_provider, joined_data)
+    print(data)
+
+    generated_content = send_to_gen_ai_provider(gen_ai_provider, data)
     display_content(generated_content)
 
 
 if __name__ == '__main__':
-    asyncio.run(main(2330, GenAiProviderEnum.GoogleGemini))
+    if os.name == "nt":
+        # For "RuntimeError: Event loop is closed" error  when running on Windows devices
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    start = timeit.default_timer()
+    asyncio.run(main(2454, GenAiProviderEnum.GoogleGemini))
+    stop = timeit.default_timer()
+
+    print('Time: ', stop - start)
