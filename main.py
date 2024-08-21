@@ -136,59 +136,59 @@ async def make_simple_get_request(session: aiohttp.ClientSession, url: str) -> s
 
 async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: int) -> str:
     stock_number = str(stock_number)
-    # Fetch current stock price and essential company info
-    taiwan_stock_exchange_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{stock_number}.tw'
-    over_the_counter_market_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{stock_number}.tw'
+    twse_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{stock_number}.tw'
+    otc_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{stock_number}.tw'
 
-    stock_current_status_data_response = await make_simple_get_request(session, taiwan_stock_exchange_price_api)
-    stock_current_status_data = json.loads(stock_current_status_data_response)
+    # Look up stock assuming it's listed on Taiwan Stock Exchange (上市)
+    stock_data_response = await make_simple_get_request(session, twse_api)
+    stock_data = json.loads(stock_data_response)
 
-    # Check if the main API returned valid data, if not, try the emerging stock market API
-    if not stock_current_status_data.get('msgArray')[0].get('pid'):
-        stock_current_status_data_response = await make_simple_get_request(session, over_the_counter_market_price_api)
-        stock_current_status_data = json.loads(stock_current_status_data_response)
+    # If lookup failed, then try looking up on the over-the-counter (上櫃) market
+    if not stock_data.get('msgArray')[0].get('pid'):
+        stock_data_response = await make_simple_get_request(session, otc_api)
+        stock_data = json.loads(stock_data_response)
 
-    if not stock_current_status_data.get('msgArray')[0].get('pid'):
+    # If still nothing, then it's either not public or an emerging stock (興櫃) , which I don't plan on supporting
+    if not stock_data.get('msgArray')[0].get('pid'):
         return ""
 
-    basic_info_and_current_price = transform_and_filter_relevant_stock_data(stock_current_status_data)
+    basic_info = transform_and_filter_relevant_stock_data(stock_data)
 
-    db = SqliteDict("db.sqlite")
-    if db.get(stock_number):
-        print("data from db")
-        return basic_info_and_current_price + "\n\n" + db.get(stock_number)
+    with SqliteDict("db.sqlite") as db:
+        cached_data = db.get(stock_number)
+        if cached_data:
+            print("data from db")
+            return f"{basic_info}\n\n{cached_data}"
 
-    # Fetch accounting spreadsheets
-    urls = [
-        f'https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID={stock_number}',
-        f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=BS_M_QUAR&STOCK_ID={stock_number}',
-        f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=IS_M_QUAR_ACC&STOCK_ID={stock_number}',
-        f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=CF_M_QUAR_ACC&STOCK_ID={stock_number}',
-        f'https://goodinfo.tw/tw/StockFinGrade.asp?STOCK_ID={stock_number}'
-    ]
-
-    tasks = [make_simple_get_request(session, url) for url in urls]
-    responses = await asyncio.gather(*tasks)
-
-    soups = [BeautifulSoup(response, 'html5lib') for response in responses]
-
-    data = "\n\n".join(
-        [
-            convert_to_string("財務報表", soups[0].select_one('#txtFinDetailData')),
-            convert_to_string("資產負債表", soups[1].select_one('#divFinDetail')),
-            convert_to_string("損益表", soups[2].select_one('#divFinDetail')),
-            convert_to_string("現金流量表", soups[3].select_one('#divFinDetail')),
-            convert_to_string("財報評比資料", soups[4].select_one('#divDetail'))
+        urls = [
+            f'https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID={stock_number}',
+            f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=BS_M_QUAR&STOCK_ID={stock_number}',
+            f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=IS_M_QUAR_ACC&STOCK_ID={stock_number}',
+            f'https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=CF_M_QUAR_ACC&STOCK_ID={stock_number}',
+            f'https://goodinfo.tw/tw/StockFinGrade.asp?STOCK_ID={stock_number}'
         ]
-    )
 
-    print("saving data to db")
-    db[stock_number] = data
-    db.commit()
-    db.close()
+        responses = await asyncio.gather(*[make_simple_get_request(session, url) for url in urls])
+        soups = [BeautifulSoup(response, 'html5lib') for response in responses]
+
+        data = "\n\n".join(
+            convert_to_string(title, soup.select_one(selector))
+            for title, soup, selector in [
+                ("財務報表", soups[0], '#txtFinDetailData'),
+                ("資產負債表", soups[1], '#divFinDetail'),
+                ("損益表", soups[2], '#divFinDetail'),
+                ("現金流量表", soups[3], '#divFinDetail'),
+                ("財報評比資料", soups[4], '#divDetail')
+            ]
+        )
+
+        print("saving data to db")
+        db[stock_number] = data
+        db.commit()
+        db.close()
 
     print("data from online")
-    return basic_info_and_current_price + "\n\n" + data
+    return f"{basic_info}\n\n{data}"
 
 
 def send_to_gen_ai_provider(gen_ai_provider: GenAiProviderEnum, joined_data: str):
@@ -202,8 +202,7 @@ def send_to_gen_ai_provider(gen_ai_provider: GenAiProviderEnum, joined_data: str
     行業趨勢： 評估公司所處行業的長期發展趨勢和競爭格局。
     風險與回報： 提供每個潛在投資機會的詳細風險和預期回報分析。
     語言要求： 所有回應均需使用台灣繁體中文，避免使用中國簡體字。
-    買進建議： 請根據判財報評比資料斷現階段是否適合進倉，若財務不佳或價值不看好則建議清倉。
-    務必考量現價，若建議價格與現價落差太大易有錯失機會的可能性。建議價格若高於現價請直接建議進倉。
+    買進建議： 請根據財務健康狀況判斷是否建議買進與最佳買價。
     評分系統： 請以中長期價值投資的角度以及該公司是否受市場低估給予零到十分給的綜合評分。
     忌諱； 不提及歷史低點或高點，畢竟提供數據無法反映真實最低或最高價。"""
 
@@ -243,12 +242,12 @@ async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
 
 
 if __name__ == '__main__':
-    if os.name == "nt":
+    if os.name == 'nt':
         # For "RuntimeError: Event loop is closed" error  when running on Windows devices
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     start = timeit.default_timer()
-    asyncio.run(main(2454, GenAiProviderEnum.GoogleGemini))
+    asyncio.run(main(3008, GenAiProviderEnum.GoogleGemini))
     stop = timeit.default_timer()
 
     print('Time: ', stop - start)
