@@ -154,6 +154,9 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
 
     basic_info = transform_and_filter_relevant_stock_data(stock_data)
 
+    # Storing the accounting data for efficiency and to go easy on the API calls
+    # The data usually takes up around 30KB per stock in the db
+    # Considering there are only around 2,000 publicly traded companies in Taiwan, db size should not exceed 60MB
     with SqliteDict("db.sqlite") as db:
         # Clear data if expired
         expire_time = db.get(f'{stock_number}_expiration')
