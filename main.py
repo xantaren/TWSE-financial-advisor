@@ -16,6 +16,7 @@ import os
 import markdown
 from sqlitedict import SqliteDict
 import timeit
+import time
 
 
 class GenAiProviderEnum(Enum):
@@ -155,10 +156,14 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
     basic_info = transform_and_filter_relevant_stock_data(stock_data)
 
     with SqliteDict("db.sqlite") as db:
-        cached_data = db.get(stock_number)
-        if cached_data:
-            print("data from db")
-            return f"{basic_info}\n\n{cached_data}"
+        # Clear data if expired
+        expire_time = db.get(f'{stock_number}_expiration')
+        if expire_time and time.time() > expire_time:
+            db[stock_number] = None
+
+        stored_data = db.get(stock_number)
+        if stored_data:
+            return f"{basic_info}\n\n{stored_data}"
 
         urls = [
             f'https://goodinfo.tw/tw/StockBzPerformance.asp?STOCK_ID={stock_number}',
@@ -182,12 +187,11 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
             ]
         )
 
-        print("saving data to db")
+        # Note that I don't store basic info because it contains current price during trading hours
         db[stock_number] = data
+        db[f'{stock_number}_expiration'] = time.time() + 86400  # seconds in a day
         db.commit()
-        db.close()
 
-    print("data from online")
     return f"{basic_info}\n\n{data}"
 
 
@@ -234,8 +238,6 @@ async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
 
     if not data:
         return
-
-    print(data)
 
     generated_content = send_to_gen_ai_provider(gen_ai_provider, data)
     display_content(generated_content)
