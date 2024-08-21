@@ -12,6 +12,7 @@ from rich.markdown import Markdown
 import google.generativeai as genai
 from enum import Enum
 import os
+import markdown
 
 
 class GenAiProviderEnum(Enum):
@@ -196,6 +197,12 @@ def display_content(generated_content: str):
     console = Console()
     md = Markdown(generated_content)
     console.print(md)
+
+
+def md_to_text(md):
+    html = markdown.markdown(md)
+    soup = BeautifulSoup(html, features='html.parser')
+    return soup.get_text()
 
 
 async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
