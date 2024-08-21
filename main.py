@@ -174,16 +174,7 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
     return data
 
 
-async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
-    async with aiohttp.ClientSession() as session:
-        data = await fetch_and_process_data(session, stock_number)
-
-    if not data:
-        return
-
-    joined_data = "\n\n".join(data)
-    print(joined_data)
-
+def send_to_gen_ai_provider(gen_ai_provider: GenAiProviderEnum, joined_data: str):
     system_instruction = """您是一位經驗豐富的價值投資者，深受華倫·巴菲特投資理念的啟發。
     主要目標： 尋找具備強大基本面和長期競爭優勢但目前市值被低估的公司。
     分析重點：
@@ -195,13 +186,26 @@ async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
     語言要求： 所有回應均需使用台灣繁體中文，避免使用中國簡體字。
     買進建議： 請根據判財報評比資料斷現階段是否適合進倉，若否則建議適當的買進價格。務必考量現價，若建議價格與現價落差太大易有錯失機會的可能性。
     評分系統： 請以中長期價值投資的角度以及該公司是否受市場低估給予零到十分給的綜合評分。"""
-
     provider = get_provider(gen_ai_provider)
-    generated_content = provider.generate_content(system_instruction, joined_data)
+    return provider.generate_content(system_instruction, joined_data)
 
+
+def display_content(generated_content: str):
     console = Console()
     md = Markdown(generated_content)
     console.print(md)
+
+
+async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
+    async with aiohttp.ClientSession() as session:
+        data = await fetch_and_process_data(session, stock_number)
+
+    if not data:
+        return
+
+    joined_data = "\n\n".join(data)
+    generated_content = send_to_gen_ai_provider(gen_ai_provider, joined_data)
+    display_content(generated_content)
 
 
 if __name__ == '__main__':
