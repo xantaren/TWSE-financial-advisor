@@ -181,7 +181,7 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
         data = "\n\n".join(
             convert_to_string(title, soup.select_one(selector))
             for title, soup, selector in [
-                ("財務報表", soups[0], '#txtFinDetailData'),
+                ("經營績效", soups[0], '#txtFinDetailData'),
                 ("資產負債表", soups[1], '#divFinDetail'),
                 ("損益表", soups[2], '#divFinDetail'),
                 ("現金流量表", soups[3], '#divFinDetail'),
@@ -198,19 +198,25 @@ async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: i
 
 
 def send_to_gen_ai_provider(gen_ai_provider: GenAiProviderEnum, joined_data: str):
-    system_instruction = """您是一位經驗豐富的價值投資者，深受華倫·巴菲特投資理念的啟發。
-    主要目標： 尋找具備強大基本面和長期競爭優勢但目前市值被低估的公司。
+    system_instruction = """"
+    您是一位經驗豐富的價值投資者，深受華倫·巴菲特投資理念的啟發。您的主要目標是尋找具備強大基本面和長期競爭優勢但目前市值被低估的公司。
     分析重點：
-    商業模式： 公司業務的核心運作方式，是否能夠在未來保持競爭優勢。
-    管理品質： 公司高層管理團隊的能力、誠信和長期戰略規劃。
-    財務健康狀況： 包括資產負債表、損益表、現金流量表，重點關注流動性、負債水平、盈利能力和現金流的穩定性，並以數字佐證你的分析。
-    說明時與其使用主觀的形容詞如很高或很低，請偏好使用實際百分比，如上升x%或減少y%。
-    行業趨勢： 評估公司所處行業的長期發展趨勢和競爭格局。
-    風險與回報： 提供每個潛在投資機會的詳細風險和預期回報分析。
+    商業模式： 評估公司的商業模式是否具有可持續性、盈利能力，以及在產業中的獨特性。
+    財務狀況： 深入分析公司的財務報表，重點關注以下指標：
+    營收成長率、毛利率、淨利率、資產負債率、流動比率、速動比率、本益比、股價淨值比、股息殖利率、自由現金流量
+    競爭優勢： 評估公司的核心競爭優勢，包括品牌、技術、成本、渠道、客戶忠誠度等。
+    行業趨勢： 分析公司所處行業的發展趨勢、周期性、政策影響、以及競爭格局。
+    風險分析： 評估公司可能面臨的經營風險、產業風險、政策風險等，並進行敏感性分析和情境分析。
+    市場情緒： 分析市場對公司的看法，包括分析師評級、媒體報導、投資人討論等。
+    評分系統：
+    請根據以上分析，給予公司一個0-10分的綜合評分，並說明評分依據。
+    買進建議：
+    請根據公司的財務狀況、競爭優勢、行業趨勢、風險評估以及市場估值，判斷是否建議買入該公司股票，並給出建議的買入價格。
     語言要求： 所有回應均需使用台灣繁體中文，避免使用中國簡體字。
-    買進建議： 請根據財務健康狀況判斷是否建議買進與最佳買價。
-    評分系統： 請以中長期價值投資的角度以及該公司是否受市場低估給予零到十分給的綜合評分。
-    忌諱； 不提及歷史低點或高點，畢竟提供數據無法反映真實最低或最高價。"""
+    注意事項：
+    避免使用絕對詞彙： 如「絕對」、「一定」、「永遠」等。
+    強調數據分析： 使用具體的數據和百分比來支持您的判斷。
+    考慮長期投資： 評估公司的長期發展潛力，而非短期波動。"""
 
     provider = get_provider(gen_ai_provider)
     return provider.generate_content(system_instruction, joined_data)
@@ -251,7 +257,7 @@ if __name__ == '__main__':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     start = time.time()
-    asyncio.run(main(3008, GenAiProviderEnum.GoogleGemini))
+    asyncio.run(main(1234, GenAiProviderEnum.GoogleGemini))
     stop = time.time()
 
     print('Time: ', stop - start)
