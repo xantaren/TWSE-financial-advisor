@@ -15,7 +15,6 @@ from enum import Enum
 import os
 import markdown
 from sqlitedict import SqliteDict
-import timeit
 import time
 
 
@@ -248,8 +247,8 @@ if __name__ == '__main__':
         # For "RuntimeError: Event loop is closed" error  when running on Windows devices
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    start = timeit.default_timer()
+    start = time.time()
     asyncio.run(main(3008, GenAiProviderEnum.GoogleGemini))
-    stop = timeit.default_timer()
+    stop = time.time()
 
     print('Time: ', stop - start)
