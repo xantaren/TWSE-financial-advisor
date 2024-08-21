@@ -133,15 +133,15 @@ async def make_simple_get_request(session: aiohttp.ClientSession, url: str) -> s
 
 async def fetch_and_process_data(session: aiohttp.ClientSession, stock_number: int) -> list:
     # Fetch current stock price and essential company info
-    stock_market_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{stock_number}.tw'
-    emerging_stock_market_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{stock_number}.tw'
+    taiwan_stock_exchange_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{stock_number}.tw'
+    over_the_counter_market_price_api = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=otc_{stock_number}.tw'
 
-    stock_current_status_data_response = await make_simple_get_request(session, stock_market_price_api)
+    stock_current_status_data_response = await make_simple_get_request(session, taiwan_stock_exchange_price_api)
     stock_current_status_data = json.loads(stock_current_status_data_response)
 
     # Check if the main API returned valid data, if not, try the emerging stock market API
     if not stock_current_status_data.get('msgArray')[0].get('pid'):
-        stock_current_status_data_response = await make_simple_get_request(session, emerging_stock_market_price_api)
+        stock_current_status_data_response = await make_simple_get_request(session, over_the_counter_market_price_api)
         stock_current_status_data = json.loads(stock_current_status_data_response)
 
     if not stock_current_status_data.get('msgArray')[0].get('pid'):
