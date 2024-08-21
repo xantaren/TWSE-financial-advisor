@@ -62,7 +62,7 @@ class OpenAi(GenAiProvider):
                 {'role': 'user', 'content': prompt},
             ],
             temperature=1,
-            max_tokens=4096,
+            max_tokens=16384 if model_name == "gpt-4o-mini" else 4096,
             top_p=1,
             frequency_penalty=0,
             presence_penalty=0
