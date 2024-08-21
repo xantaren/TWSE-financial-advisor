@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 import google.generativeai as genai
 from enum import Enum
+import os
 
 
 class GenAiProviderEnum(Enum):
@@ -30,7 +31,7 @@ def get_provider(enum: GenAiProviderEnum) -> GenAiProvider:
 
 class GoogleGemini(GenAiProvider):
     def __init__(self):
-        self._api_key = ""
+        self._api_key = os.environ.get("GOOGLE_GEMINI_API_KEY")
 
     def generate_content(self, system_instruction: str, prompt: str) -> str:
         api_key = self._api_key
@@ -49,7 +50,7 @@ class GoogleGemini(GenAiProvider):
 
 class OpenAi(GenAiProvider):
     def __init__(self):
-        self._api_key = ""
+        self._api_key = os.environ.get("OPEN_AI_API_KEY")
 
     def generate_content(self, system_instruction: str, prompt: str) -> str:
         client = OpenAI(api_key=self._api_key)
