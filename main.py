@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import aiohttp
+import tiktoken
 from bs4 import BeautifulSoup
 import pandas
 from io import StringIO
@@ -76,7 +77,7 @@ class OpenAi(GenAiProvider):
 
 
 def convert_to_string(name: str, data: BeautifulSoup) -> str:
-    return f"{name}\n" + pandas.read_html(StringIO(data.prettify()))[0].to_string()
+    return f"{name}\n" + pandas.read_html(StringIO(data.prettify()))[0].to_csv()
 
 
 def transform_and_filter_relevant_stock_data(json_data):
@@ -181,7 +182,7 @@ def send_to_gen_ai_provider(gen_ai_provider: GenAiProviderEnum, joined_data: str
     分析重點：
     商業模式： 公司業務的核心運作方式，是否能夠在未來保持競爭優勢。
     管理品質： 公司高層管理團隊的能力、誠信和長期戰略規劃。
-    財務健康狀況： 包括資產負債表、損益表、現金流量表，重點關注流動性、負債水平、盈利能力和現金流的穩定性。
+    財務健康狀況： 包括資產負債表、損益表、現金流量表，重點關注流動性、負債水平、盈利能力和現金流的穩定性，並以詳細數據佐證你的分析。
     行業趨勢： 評估公司所處行業的長期發展趨勢和競爭格局。
     風險與回報： 提供每個潛在投資機會的詳細風險和預期回報分析。
     語言要求： 所有回應均需使用台灣繁體中文，避免使用中國簡體字。
@@ -203,6 +204,12 @@ def md_to_text(md):
     html = markdown.markdown(md)
     soup = BeautifulSoup(html, features='html.parser')
     return soup.get_text()
+
+
+def num_tokens_from_string(string: str, encoding_name: str) -> int:
+    encoding = tiktoken.encoding_for_model(encoding_name)
+    num_tokens = len(encoding.encode(string))
+    return num_tokens
 
 
 async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
