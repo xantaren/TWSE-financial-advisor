@@ -209,4 +209,4 @@ async def main(stock_number: int, gen_ai_provider: GenAiProviderEnum):
 
 
 if __name__ == '__main__':
-    asyncio.run(main(3663, GenAiProviderEnum.OpenAi))
+    asyncio.run(main(2330, GenAiProviderEnum.GoogleGemini))
